@@ -4,13 +4,15 @@ import "../styles/global.css";
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Ocean Notes</title>
-    <meta name="generator" content={Astro.generator} />
+    <meta name="description" content="Simple notes manager with Ocean Professional theme" />
   </head>
   <body>
-    <slot />
+    <div id="app-root">
+      <slot />
+    </div>
   </body>
 </html>

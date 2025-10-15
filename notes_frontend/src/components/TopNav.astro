@@ -1,0 +1,20 @@
+---
+/**
+ * Top navigation bar with branding and action buttons.
+ * Exposes custom events via data attributes handled by the page script.
+ */
+const { } = Astro.props;
+---
+<nav class="topbar" role="navigation" aria-label="Top">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <div class="brand-title">Ocean Notes</div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="toggle-sidebar" aria-label="Toggle sidebar" title="Toggle Sidebar">Sidebar</button>
+      <button class="btn btn-primary" id="add-note" aria-label="Add new note">New Note</button>
+      <button class="btn btn-danger" id="delete-note" aria-label="Delete current note">Delete</button>
+    </div>
+  </div>
+</nav>

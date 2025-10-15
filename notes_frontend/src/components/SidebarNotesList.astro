@@ -1,0 +1,45 @@
+---
+import type { Note } from "../utils/storage";
+
+// Props
+interface Props {
+  notes: Note[];
+  activeId: string | null;
+}
+const { notes = [], activeId = null } = Astro.props as Props;
+---
+<aside class="sidebar" id="sidebar" aria-label="Notes list">
+  <div class="sidebar-header">
+    <div class="sidebar-search" role="search">
+      <input
+        id="search-input"
+        type="text"
+        placeholder="Search notes..."
+        aria-label="Search notes"
+      />
+      <button class="btn" id="clear-search" aria-label="Clear search">Clear</button>
+    </div>
+  </div>
+  <ul class="notes-list" id="notes-list" role="listbox" aria-label="Notes">
+    {
+      notes.map((n) => (
+        <li key={n.id}>
+          <button
+            class={`note-item ${activeId === n.id ? 'active' : ''}`}
+            data-id={n.id}
+            role="option"
+            aria-selected={activeId === n.id}
+            title={n.title}
+          >
+            <div class="note-item-title">{n.title || 'Untitled'}</div>
+            <div class="note-item-snippet">{(n.content || '').slice(0, 100)}</div>
+          </button>
+        </li>
+      ))
+    }
+  </ul>
+</aside>
+
+<script>
+  // Handle search and list item selection; logic bound in page script as well
+</script>

@@ -1,11 +1,280 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import BaseLayout from "../layouts/BaseLayout.astro";
+import TopNav from "../components/TopNav.astro";
+import SidebarNotesList from "../components/SidebarNotesList.astro";
+import NoteEditor from "../components/NoteEditor.astro";
+import type { Note } from "../utils/storage";
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+const initialNotes: Note[] = [];
+const activeId: string | null = null;
+const showPreview = false;
 ---
+<BaseLayout>
+  <TopNav />
+  <main class="container">
+    <div class="layout" id="two-pane">
+      <SidebarNotesList notes={initialNotes} activeId={activeId} />
+      <NoteEditor note={null} showPreview={showPreview} />
+    </div>
+  </main>
+  <script is:raw>
+    // Client-side application logic
+    (function() {
+      const STORAGE_KEY = 'notes_v1';
+      // State
+      let notes = [];
+      let selectedId = null;
+      let previewOn = false;
+      let filter = '';
 
-<Layout>
-	<Welcome />
-</Layout>
+      // Elements
+      const sidebarEl = document.getElementById('sidebar');
+      const listEl = document.getElementById('notes-list');
+      const searchInput = document.getElementById('search-input');
+      const clearSearchBtn = document.getElementById('clear-search');
+
+      const addBtn = document.getElementById('add-note');
+      const delBtn = document.getElementById('delete-note');
+      const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+
+      const titleInput = document.getElementById('note-title');
+      const contentArea = document.getElementById('note-content');
+      const previewEl = document.getElementById('note-preview');
+      const previewToggle = document.getElementById('toggle-preview');
+
+      function readNotes() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          notes = raw ? JSON.parse(raw) : [];
+        } catch {
+          notes = [];
+        }
+        notes.sort((a, b) => b.updatedAt - a.updatedAt);
+      }
+
+      function writeNotes() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+      }
+
+      function setActive(id) {
+        selectedId = id;
+        renderList();
+        renderEditor();
+      }
+
+      function filteredNotes() {
+        if (!filter?.trim()) return notes;
+        const q = filter.toLowerCase();
+        return notes.filter(n =>
+          (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q)
+        );
+      }
+
+      function renderList() {
+        if (!listEl) return;
+        const items = filteredNotes()
+          .map(n => {
+            const active = n.id === selectedId ? 'active' : '';
+            const snippet = (n.content || '').replace(/\n+/g, ' ').slice(0, 100);
+            return `
+              <li>
+                <button class="note-item ${active}" data-id="${n.id}" role="option" aria-selected="${active ? 'true' : 'false'}">
+                  <div class="note-item-title">${escapeHtml(n.title || 'Untitled')}</div>
+                  <div class="note-item-snippet">${escapeHtml(snippet)}</div>
+                </button>
+              </li>
+            `;
+          })
+          .join('');
+        listEl.innerHTML = items || '<li><div style="padding:12px;color:#6b7280;">No notes found</div></li>';
+      }
+
+      function renderEditor() {
+        if (!titleInput || !contentArea || !previewEl) return;
+        const note = notes.find(n => n.id === selectedId) || null;
+        titleInput.value = note?.title || '';
+        contentArea.value = note?.content || '';
+        updatePreview();
+        const metaEls = document.getElementsByClassName('meta');
+        if (metaEls.length > 0) {
+          metaEls[0].textContent = note ? 'Last updated: ' + new Date(note.updatedAt).toLocaleString() : 'No note selected';
+        }
+      }
+
+      function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, (m) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[m]));
+      }
+
+      function markdownToHtml(src) {
+        let out = escapeHtml(src);
+        out = out.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+        out = out.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+        out = out.replace(/^# (.*)$/gm, '<h1>$1</h1>');
+        out = out.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        out = out.replace(/\*(.*?)\*/g, '<em>$1</em>');
+        out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+        out = out.replace(/\n/g, '<br/>');
+        return out;
+      }
+
+      function updatePreview() {
+        if (!previewEl || !contentArea) return;
+        if (previewOn) {
+          previewEl.classList.remove('hidden');
+          previewEl.innerHTML = markdownToHtml(contentArea.value);
+        } else {
+          previewEl.classList.add('hidden');
+          previewEl.innerHTML = '';
+        }
+      }
+
+      const saveDebounced = debounce(function saveCurrent() {
+        if (!selectedId) return;
+        const idx = notes.findIndex(n => n.id === selectedId);
+        if (idx < 0) return;
+        const updated = {
+          ...notes[idx],
+          title: titleInput ? titleInput.value : notes[idx].title,
+          content: contentArea ? contentArea.value : notes[idx].content,
+          updatedAt: Date.now()
+        };
+        notes[idx] = updated;
+        notes.sort((a, b) => b.updatedAt - a.updatedAt);
+        writeNotes();
+        renderList();
+        setActive(updated.id);
+      }, 300);
+
+      function debounce(fn, wait = 300) {
+        let t;
+        return function(...args) {
+          if (t) clearTimeout(t);
+          t = window.setTimeout(() => fn.apply(this, args), wait);
+        };
+      }
+
+      function init() {
+        readNotes();
+        if (notes.length === 0) {
+          const first = {
+            id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+            title: 'Welcome to Ocean Notes',
+            content: '# Hello!\\n\\n- Create a new note with "New Note"\\n- Edit the title and content\\n- Toggle preview for Markdown rendering\\n- Your notes are saved in your browser (localStorage)',
+            updatedAt: Date.now()
+          };
+          notes = [first];
+          writeNotes();
+        }
+        selectedId = notes[0]?.id || null;
+        renderList();
+        renderEditor();
+
+        if (listEl) {
+          listEl.addEventListener('click', (e) => {
+            const target = e.target.closest('.note-item');
+            if (target && target.dataset.id) {
+              setActive(target.dataset.id);
+            }
+          });
+        }
+
+        if (addBtn) {
+          addBtn.addEventListener('click', () => {
+            const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
+            const newNote = { id, title: 'Untitled', content: '', updatedAt: Date.now() };
+            notes = [newNote, ...notes];
+            writeNotes();
+            setActive(id);
+            if (window.innerWidth < 960 && sidebarEl) {
+              sidebarEl.classList.remove('open');
+            }
+          });
+        }
+
+        if (delBtn) {
+          delBtn.addEventListener('click', () => {
+            if (!selectedId) return;
+            const idx = notes.findIndex(n => n.id === selectedId);
+            if (idx < 0) return;
+            const title = notes[idx].title || 'this note';
+            const confirmed = window.confirm(\`Delete "\${title}"?\`);
+            if (!confirmed) return;
+            notes.splice(idx, 1);
+            writeNotes();
+            selectedId = notes[0]?.id || null;
+            renderList();
+            renderEditor();
+          });
+        }
+
+        if (toggleSidebarBtn && sidebarEl) {
+          toggleSidebarBtn.addEventListener('click', () => {
+            sidebarEl.classList.toggle('open');
+          });
+        }
+
+        if (searchInput) {
+          const onSearch = () => {
+            filter = searchInput.value || '';
+            renderList();
+          };
+          searchInput.addEventListener('input', onSearch);
+        }
+
+        if (clearSearchBtn && searchInput) {
+          clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            filter = '';
+            renderList();
+            searchInput.focus();
+          });
+        }
+
+        if (titleInput) {
+          titleInput.addEventListener('input', saveDebounced);
+          titleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              contentArea?.focus();
+            }
+          });
+        }
+        if (contentArea) {
+          contentArea.addEventListener('input', () => {
+            saveDebounced();
+            if (previewOn) updatePreview();
+          });
+        }
+        if (previewToggle) {
+          previewToggle.addEventListener('click', () => {
+            previewOn = !previewOn;
+            previewToggle.setAttribute('aria-pressed', previewOn ? 'true' : 'false');
+            previewToggle.textContent = previewOn ? 'Hide Preview' : 'Show Preview';
+            updatePreview();
+          });
+        }
+
+        window.addEventListener('keydown', (e) => {
+          const meta = e.ctrlKey || e.metaKey;
+          if (meta && e.key.toLowerCase() === 'n') {
+            e.preventDefault();
+            addBtn?.click();
+          } else if (e.key === 'Delete') {
+            delBtn?.click();
+          } else if (meta && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            searchInput?.focus();
+          }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</BaseLayout>

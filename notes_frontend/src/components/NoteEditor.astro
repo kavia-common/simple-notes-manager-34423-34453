@@ -1,0 +1,50 @@
+---
+import type { Note } from "../utils/storage";
+
+interface Props {
+  note: Note | null;
+  showPreview?: boolean;
+}
+const { note, showPreview = false } = Astro.props as Props;
+
+function formatDate(ts?: number) {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return '';
+  }
+}
+---
+<section class="editor" aria-label="Editor">
+  <div class="editor-toolbar">
+    <div class="meta">
+      {note ? `Last updated: ${formatDate(note.updatedAt)}` : 'No note selected'}
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn" id="toggle-preview" aria-pressed={showPreview ? 'true' : 'false'}>
+      {showPreview ? 'Hide Preview' : 'Show Preview'}
+    </button>
+  </div>
+  <div class="editor-body">
+    <input
+      id="note-title"
+      class="title-input"
+      type="text"
+      placeholder="Note title"
+      value={note?.title || ''}
+      aria-label="Note title"
+    />
+    <textarea
+      id="note-content"
+      class="content-area"
+      placeholder="Write your note here... (Markdown supported in preview)"
+      aria-label="Note content"
+    >{note?.content || ''}</textarea>
+    <div id="note-preview" class={`preview ${showPreview ? '' : 'hidden'}`} aria-live="polite"></div>
+  </div>
+</section>
+
+<script>
+  // Note: actual state management happens in the page script; this component provides structure.
+</script>
